@@ -27,6 +27,7 @@ export function createDefaultProfile(guestId) {
     def:                 5,
     gold:                500,
     element:             'feu',
+    is_premium_color:    false,
     inventory:           getStarterInventory(),
     boss_tickets:        3,
     boss_tickets_reset:  new Date().toDateString(),
@@ -141,6 +142,45 @@ export function gainXP(player, amount) {
     p.def     += 1
   }
   return p
+}
+
+export function printMessagesSQL() {
+  console.log(
+`
+╔══════════════════════════════════════════════════════════════════╗
+║       GriMMO — SCRIPT SQL SUPABASE (table messages + realtime)  ║
+╠══════════════════════════════════════════════════════════════════╣
+║  Exécutez ce bloc dans : Supabase > SQL Editor                  ║
+╚══════════════════════════════════════════════════════════════════╝
+
+CREATE TABLE IF NOT EXISTS public.messages (
+  id                UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  user_id           TEXT        NOT NULL REFERENCES public.profiles(guest_id) ON DELETE CASCADE,
+  username          TEXT        NOT NULL,
+  text              TEXT        NOT NULL CHECK (char_length(text) <= 500),
+  is_premium_color  BOOLEAN     NOT NULL DEFAULT false
+);
+
+-- Index pour charger les derniers messages rapidement
+CREATE INDEX IF NOT EXISTS messages_created_at_idx
+  ON public.messages (created_at DESC);
+
+-- RLS
+ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Messages lisibles par tous"
+  ON public.messages FOR SELECT USING (true);
+
+CREATE POLICY "Envoi de message autorisé"
+  ON public.messages FOR INSERT WITH CHECK (true);
+
+-- Activer la réplication Realtime sur la table messages
+ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
+
+-- ✅ Realtime activé. La Taverne recevra les nouveaux messages en direct.
+`
+  )
 }
 
 export function printSQLScript() {

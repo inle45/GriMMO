@@ -279,6 +279,25 @@ html, body, #root {
 }
 .pulse-combat { animation: combatPulse 1s infinite; }
 
+/* Pseudo doré Premium */
+.premium-username {
+  font-size: 10px;
+  font-weight: 700;
+  color: #FFD700;
+  text-shadow: 0 0 8px rgba(255,215,0,0.9), 0 0 16px rgba(255,215,0,0.5);
+  letter-spacing: 0.03em;
+}
+.premium-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #FFD700;
+  text-shadow: 0 0 8px rgba(255,215,0,0.8);
+  background: rgba(255,215,0,0.12);
+  border: 1px solid rgba(255,215,0,0.35);
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
 /* Item rarity */
 .rarity-commun  { border-color: rgba(176,176,200,0.3) !important; }
 .rarity-rare    { border-color: rgba(79,195,247,0.5) !important; box-shadow: 0 0 6px rgba(79,195,247,0.2); }

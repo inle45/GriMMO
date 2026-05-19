@@ -19,13 +19,13 @@ const MARKET_LISTINGS = [
   { id: 'm6', seller: 'Kael #BD22',     el: 'feu',   name: 'Heaume Infernal',    emoji: '⛑️',  price: 750,  effect: 'def+12', rarity: 'epique'  },
 ]
 
+// id: 'pseudo-dore' est le seul achat fonctionnel (100 Or, pas de gemmes)
 const PREMIUM_ITEMS = [
-  { id: 'p1', name: 'Aura Spectrale',      emoji: '🌟',   price: 50,  currency: 'gemmes', desc: 'Aura lumineuse autour de votre héros' },
-  { id: 'p2', name: 'Titre : L\'Éternel',  emoji: '👑',   price: 80,  currency: 'gemmes', desc: 'Titre rare affiché à la Taverne' },
-  { id: 'p3', name: 'Skin : Chevalier Noir',emoji: '⚫',  price: 120, currency: 'gemmes', desc: 'Apparence alternative pour votre héros' },
-  { id: 'p4', name: 'Cadre de Profil : Dragon',emoji:'🐉',price: 60,  currency: 'gemmes', desc: 'Cadre animé sur votre avatar' },
-  { id: 'p5', name: 'Émote : Hurlement',   emoji: '😤',   price: 30,  currency: 'gemmes', desc: 'Émote exclusive pour la Taverne' },
-  { id: 'p6', name: 'Pack : Fondateur',    emoji: '🎁',   price: 200, currency: 'gemmes', desc: 'Aura + Titre + Skin + badge exclusif' },
+  { id: 'pseudo-dore',  name: 'Pseudo Doré',        emoji: '✦',   price: 100, currency: 'or',     desc: 'Votre pseudo brille en or dans la Taverne. Visible par tous !' },
+  { id: 'p1',           name: 'Aura Spectrale',      emoji: '🌟',  price: 50,  currency: 'gemmes', desc: 'Aura lumineuse autour de votre héros' },
+  { id: 'p2',           name: 'Titre : L\'Éternel',  emoji: '👑',  price: 80,  currency: 'gemmes', desc: 'Titre rare affiché à la Taverne' },
+  { id: 'p3',           name: 'Skin : Chevalier Noir',emoji: '⚫', price: 120, currency: 'gemmes', desc: 'Apparence alternative pour votre héros' },
+  { id: 'p4',           name: 'Pack : Fondateur',    emoji: '🎁',  price: 200, currency: 'gemmes', desc: 'Aura + Titre + Skin + badge exclusif' },
 ]
 
 const RARITY_COLORS = {
@@ -83,8 +83,16 @@ export default function Economie({ player, updatePlayer }) {
     updatePlayer({ gold: player.gold - listing.price })
   }
 
-  function buyPremium() {
-    notify('Boutique Premium bientôt disponible !', false)
+  function buyPremium(item) {
+    if (!player) return
+    if (item.id === 'pseudo-dore') {
+      if (player.is_premium_color) { notify('Pseudo Doré déjà activé !', false); return }
+      if (player.gold < item.price) { notify('Or insuffisant ! (100 Or requis)', false); return }
+      updatePlayer({ gold: player.gold - item.price, is_premium_color: true })
+      notify('✦ Pseudo Doré activé ! Il brille dans la Taverne.')
+      return
+    }
+    notify('Bientôt disponible avec les Gemmes !', false)
   }
 
   const SUBTABS = ['Échoppe', 'Marché', 'Premium']
@@ -159,7 +167,7 @@ export default function Economie({ player, updatePlayer }) {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {PREMIUM_ITEMS.map(item => (
-                <PremiumItem key={item.id} item={item} onBuy={buyPremium} />
+                <PremiumItem key={item.id} item={item} player={player} onBuy={() => buyPremium(item)} />
               ))}
             </div>
           </>
@@ -246,23 +254,39 @@ function MarketItem({ listing, gold, onBuy }) {
   )
 }
 
-function PremiumItem({ item, onBuy }) {
+function PremiumItem({ item, player, onBuy }) {
+  const isGold    = item.id === 'pseudo-dore'
+  const owned     = isGold && player?.is_premium_color
+  const canAfford = isGold ? (player?.gold || 0) >= item.price : true
+
   return (
-    <div className="glass" style={{ padding: '14px 12px', display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', textAlign: 'center' }}>
+    <div className="glass" style={{
+      padding: '14px 12px', display: 'flex', flexDirection: 'column', gap: 8,
+      alignItems: 'center', textAlign: 'center',
+      border: isGold ? '1px solid rgba(255,215,0,0.35)' : undefined,
+      background: isGold ? 'rgba(255,215,0,0.04)' : undefined,
+    }}>
       <span style={{ fontSize: 32 }}>{item.emoji}</span>
-      <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: '#E2E2F0' }}>{item.name}</p>
+      <p style={{ margin: 0, fontSize: 13, fontWeight: 700,
+        color: isGold ? '#FFD700' : '#E2E2F0',
+        textShadow: isGold ? '0 0 10px rgba(255,215,0,0.5)' : 'none' }}>
+        {item.name}
+      </p>
       <p style={{ margin: 0, fontSize: 11, color: '#6B6B8A', lineHeight: 1.4 }}>{item.desc}</p>
-      <button
-        onClick={onBuy}
-        style={{
-          padding: '7px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer',
-          background: 'rgba(206,147,216,0.15)',
-          border: '1px solid rgba(206,147,216,0.4)',
-          color: '#CE93D8', transition: 'all 0.2s', width: '100%',
-        }}
-      >
-        💎 {item.price}
-      </button>
+      {owned ? (
+        <p style={{ margin: 0, fontSize: 12, color: '#FFD700', fontWeight: 700 }}>✦ Activé</p>
+      ) : (
+        <button onClick={onBuy} disabled={!canAfford} style={{
+          padding: '7px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700,
+          cursor: canAfford ? 'pointer' : 'not-allowed', width: '100%',
+          transition: 'all 0.2s', opacity: canAfford ? 1 : 0.5,
+          background: isGold ? 'rgba(255,215,0,0.15)' : 'rgba(206,147,216,0.15)',
+          border: isGold ? '1px solid rgba(255,215,0,0.4)' : '1px solid rgba(206,147,216,0.4)',
+          color: isGold ? '#FFD700' : '#CE93D8',
+        }}>
+          {isGold ? `💰 ${item.price} Or` : `💎 ${item.price} Gemmes`}
+        </button>
+      )}
     </div>
   )
 }
