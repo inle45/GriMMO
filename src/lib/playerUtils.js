@@ -17,6 +17,7 @@ function generateUsername(guestId) {
 export function createDefaultProfile(guestId) {
   return {
     guest_id:            guestId,
+    auth_id:             null,
     username:            generateUsername(guestId),
     level:               1,
     xp:                  0,

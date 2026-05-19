@@ -264,6 +264,14 @@ html, body, #root {
 .badge-gold  { background: rgba(255,215,0,0.15); color: var(--c-gold);  border: 1px solid rgba(255,215,0,0.3); }
 .badge-xp    { background: rgba(206,147,216,0.2); color: var(--c-xp);  border: 1px solid rgba(206,147,216,0.3); }
 
+/* Lueurs rareté Gacha */
+@keyframes glowGold   { 0%,100%{box-shadow:0 0 8px rgba(255,215,0,0.4)}  50%{box-shadow:0 0 24px rgba(255,215,0,0.8)} }
+@keyframes glowPurple { 0%,100%{box-shadow:0 0 8px rgba(206,147,216,0.4)} 50%{box-shadow:0 0 20px rgba(206,147,216,0.7)} }
+@keyframes glowBlue   { 0%,100%{box-shadow:0 0 6px rgba(79,195,247,0.3)} 50%{box-shadow:0 0 16px rgba(79,195,247,0.6)} }
+.glow-gold   { animation: glowGold   1.5s infinite; }
+.glow-purple { animation: glowPurple 1.5s infinite; }
+.glow-blue   { animation: glowBlue   1.5s infinite; }
+
 /* Animation d'apparition */
 @keyframes fadeSlideUp {
   from { opacity: 0; transform: translateY(10px); }
