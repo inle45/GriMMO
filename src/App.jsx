@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
-import { initPlayer, persistPlayer, gainXP, createDefaultProfile, savePlayer } from './lib/playerUtils'
+import { initPlayer, persistPlayer, gainXP, createDefaultProfile, savePlayer, recalcStats } from './lib/playerUtils'
 import AuthModal  from './components/AuthModal'
 import BottomNav  from './components/BottomNav'
 import Taverne    from './tabs/Taverne'
@@ -43,7 +43,7 @@ export default function App() {
       .select('*').eq('auth_id', user.id).single()
 
     if (existing) {
-      setPlayer(existing)
+      setPlayer(recalcStats(existing))
     } else {
       const guestId = user.id
       const username = usernameOverride || user.user_metadata?.username || `Damné #${guestId.slice(-4).toUpperCase()}`
@@ -69,9 +69,12 @@ export default function App() {
   }
 
   async function updatePlayer(patch) {
-    const updated = typeof patch === 'function' ? patch(player) : { ...player, ...patch }
-    setPlayer(updated)
-    await persistPlayer(updated)
+    let next
+    setPlayer(prev => {
+      next = typeof patch === 'function' ? patch(prev) : { ...prev, ...patch }
+      return next
+    })
+    await persistPlayer(next)
   }
 
   async function handleSignOut() {

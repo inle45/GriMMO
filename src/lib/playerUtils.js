@@ -24,6 +24,8 @@ export function createDefaultProfile(guestId) {
     xp_next:             100,
     hp:                  100,
     hp_max:              100,
+    base_atk:            10,
+    base_def:            5,
     atk:                 10,
     def:                 5,
     gold:                500,
@@ -38,6 +40,69 @@ export function createDefaultProfile(guestId) {
     boss_tickets:        3,
     boss_tickets_reset:  new Date().toDateString(),
   }
+}
+
+// Parse un effet d'item (ex: "atk+8", "def+3", "all+5") → { atk, def }
+export function parseItemBonus(effect) {
+  if (!effect) return { atk: 0, def: 0 }
+  const all = effect.match(/all\+(\d+)/)
+  const flat = all ? parseInt(all[1]) : 0
+  const atk = effect.match(/atk\+(\d+)/)
+  const def = effect.match(/def\+(\d+)/)
+  return {
+    atk: (atk ? parseInt(atk[1]) : 0) + flat,
+    def: (def ? parseInt(def[1]) : 0) + flat,
+  }
+}
+
+// Recalcule atk/def en fonction des items équipés.
+// À appeler à chaque équipement/déséquipement et au chargement.
+export function recalcStats(player) {
+  let atkBonus = 0
+  let defBonus = 0
+  for (const item of (player.inventory || [])) {
+    if (item?.equipped) {
+      const b = parseItemBonus(item.effect)
+      atkBonus += b.atk
+      defBonus += b.def
+    }
+  }
+  // Migration : si base_atk absent, les stats actuelles sont les stats de base
+  // (l'équipement n'ayant jamais fonctionné avant ce correctif)
+  const base_atk = player.base_atk !== undefined ? player.base_atk : player.atk
+  const base_def = player.base_def !== undefined ? player.base_def : player.def
+  return {
+    ...player,
+    base_atk,
+    base_def,
+    atk: base_atk + atkBonus,
+    def: base_def + defBonus,
+  }
+}
+
+const INVENTORY_SIZE = 15
+
+// Ajoute un item à l'inventaire (max INVENTORY_SIZE slots).
+// Empile les consommables. Retourne { player: updated, added: boolean }.
+export function addToInventory(player, item) {
+  const inv = (player.inventory || []).slice()
+
+  // Empilage consommable
+  const stackIdx = inv.findIndex(s => s && s.name === item.name && s.type === 'consommable')
+  if (stackIdx >= 0) {
+    inv[stackIdx] = { ...inv[stackIdx], qty: (inv[stackIdx].qty || 1) + 1 }
+    return { player: { ...player, inventory: inv }, added: true }
+  }
+
+  // Chercher un slot vide dans les 15 premiers uniquement
+  const emptyIdx = inv.slice(0, INVENTORY_SIZE).findIndex(s => !s)
+  if (emptyIdx >= 0) {
+    inv[emptyIdx] = { ...item, id: `${Date.now()}-${Math.random().toString(36).slice(2)}` }
+    return { player: { ...player, inventory: inv }, added: true }
+  }
+
+  // Inventaire plein (15 slots)
+  return { player, added: false }
 }
 
 function getStarterInventory() {
@@ -69,11 +134,13 @@ export async function initPlayer() {
   if (!player) {
     const guestId = generateGuestId()
     player = createDefaultProfile(guestId)
+    player = recalcStats(player)
     savePlayer(player)
     await syncToSupabase(player, 'INSERT')
     printSQLScript()
   } else {
     resetBossTicketsIfNewDay(player)
+    player = recalcStats(player)
     savePlayer(player)
     printSQLScript()
   }
@@ -139,13 +206,15 @@ export function gainXP(player, amount) {
   const p = { ...player }
   p.xp += amount
   while (p.xp >= p.xp_next) {
-    p.xp      -= p.xp_next
-    p.level   += 1
-    p.xp_next  = Math.floor(p.xp_next * 1.5)
-    p.hp_max  += 10
-    p.hp       = p.hp_max
-    p.atk     += 2
-    p.def     += 1
+    p.xp       -= p.xp_next
+    p.level    += 1
+    p.xp_next   = Math.floor(p.xp_next * 1.5)
+    p.hp_max   += 10
+    p.hp        = p.hp_max
+    p.base_atk  = (p.base_atk !== undefined ? p.base_atk : p.atk) + 2
+    p.base_def  = (p.base_def !== undefined ? p.base_def : p.def) + 1
+    p.atk      += 2
+    p.def      += 1
   }
   return p
 }

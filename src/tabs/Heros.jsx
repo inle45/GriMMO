@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { recalcStats } from '../lib/playerUtils'
 
 const AVATARS = ['🧙','⚔️','🗡️','🛡️','🏹','🪄','💀','👹','🧝','🧌','🐉','🦅','🐺','🦇','🧛','🧟','👺','🔱','⚡','🌑']
 const ELEMENT_LABELS = { feu: '🔥 Feu', terre: '🌿 Terre', eau: '💧 Eau' }
@@ -7,10 +8,11 @@ const ELEMENT_COLORS = { feu: 'var(--c-fire)', terre: 'var(--c-earth)', eau: 'va
 function elRgb(el) { return el==='feu'?'255,107,53':el==='eau'?'79,195,247':'129,199,132' }
 
 export default function Heros({ player, updatePlayer }) {
-  const [selSlot,      setSelSlot]      = useState(null)
-  const [showAvatar,   setShowAvatar]   = useState(false)
-  const [editSetIdx,   setEditSetIdx]   = useState(null)
-  const [setNameInput, setSetNameInput] = useState('')
+  const [selSlot,       setSelSlot]       = useState(null)
+  const [showAvatar,    setShowAvatar]    = useState(false)
+  const [editSetIdx,    setEditSetIdx]    = useState(null)
+  const [setNameInput,  setSetNameInput]  = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   if (!player) return null
 
@@ -44,7 +46,7 @@ export default function Heros({ player, updatePlayer }) {
     const inv = (player.inventory || []).map(item =>
       item ? { ...item, equipped: set.equipped_ids.includes(item.id) } : null
     )
-    updatePlayer({ inventory: inv })
+    updatePlayer(recalcStats({ ...player, inventory: inv }))
   }
   function deleteGearSet(idx) {
     const sets = [...(player.gear_sets || [null,null,null])]
@@ -114,8 +116,8 @@ export default function Heros({ player, updatePlayer }) {
       <div>
         <Label>STATISTIQUES</Label>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-          <StatCard icon="⚔️" label="Attaque"      value={player.atk}  color="var(--c-fire)"  />
-          <StatCard icon="🛡️" label="Défense"      value={player.def}  color="var(--c-water)" />
+          <StatCard icon="⚔️" label="Attaque"      value={player.atk}  base={player.base_atk} color="var(--c-fire)"  />
+          <StatCard icon="🛡️" label="Défense"      value={player.def}  base={player.base_def} color="var(--c-water)" />
           <StatCard icon="💰" label="Or"            value={player.gold} color="var(--c-gold)"  />
           <StatCard icon="🎫" label="Tickets Boss"  value={`${player.boss_tickets}/3`} color="var(--c-xp)" />
         </div>
@@ -183,7 +185,7 @@ export default function Heros({ player, updatePlayer }) {
         <div className="inv-grid">
           {Array.from({ length: 15 }).map((_, i) => {
             const item = player.inventory[i] || null
-            return <InventorySlot key={i} item={item} selected={selSlot===i} onClick={() => setSelSlot(selSlot===i?null:i)} />
+            return <InventorySlot key={i} item={item} selected={selSlot===i} onClick={() => { setSelSlot(selSlot===i?null:i); setConfirmDelete(false) }} />
           })}
         </div>
         {selectedItem && (
@@ -196,14 +198,47 @@ export default function Heros({ player, updatePlayer }) {
               </div>
             </div>
             {selectedItem.effect && <p style={{ margin:'0 0 10px', fontSize:12, color:'#9E9EBE' }}>Effet : <span style={{ color:'#66BB6A' }}>{selectedItem.effect}</span></p>}
-            <div style={{ display:'flex', gap:8 }}>
-              {selectedItem.type==='consommable' && <button className="btn-primary" style={{ flex:1, fontSize:13 }} onClick={() => useItem(selSlot)}>Utiliser</button>}
-              <button onClick={() => {
-                const inv=[...player.inventory]; if(inv[selSlot]) inv[selSlot]={...inv[selSlot],equipped:!inv[selSlot].equipped}; updatePlayer({inventory:inv})
-              }} className="btn-secondary" style={{ flex:1, fontSize:13 }}>
-                {selectedItem.equipped ? '⬇️ Déséquiper' : '⬆️ Équiper'}
-              </button>
-            </div>
+
+            {confirmDelete ? (
+              <div style={{ background:'rgba(239,83,80,0.08)', border:'1px solid rgba(239,83,80,0.3)', borderRadius:10, padding:'10px 12px', marginBottom:8 }}>
+                <p style={{ margin:'0 0 8px', fontSize:13, color:'#EF5350', fontWeight:600 }}>Supprimer {selectedItem.name} ?</p>
+                <div style={{ display:'flex', gap:8 }}>
+                  <button onClick={() => {
+                    const inv = [...player.inventory]
+                    inv[selSlot] = null
+                    updatePlayer(recalcStats({ ...player, inventory: inv }))
+                    setSelSlot(null)
+                    setConfirmDelete(false)
+                  }} style={{ flex:1, fontSize:13, background:'rgba(239,83,80,0.2)', border:'1px solid rgba(239,83,80,0.5)', color:'#EF5350', borderRadius:10, padding:'8px', cursor:'pointer', fontWeight:600 }}>
+                    Confirmer
+                  </button>
+                  <button onClick={() => setConfirmDelete(false)} className="btn-secondary" style={{ flex:1, fontSize:13 }}>
+                    Annuler
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                {selectedItem.type==='consommable' && (
+                  <button className="btn-primary" style={{ flex:1, fontSize:13 }} onClick={() => useItem(selSlot)}>Utiliser</button>
+                )}
+                {selectedItem.type !== 'consommable' && selectedItem.type !== 'materiau' && (
+                  <button onClick={() => {
+                    const inv = [...player.inventory]
+                    if (inv[selSlot]) {
+                      inv[selSlot] = { ...inv[selSlot], equipped: !inv[selSlot].equipped }
+                      updatePlayer(recalcStats({ ...player, inventory: inv }))
+                    }
+                  }} className="btn-secondary" style={{ flex:1, fontSize:13 }}>
+                    {selectedItem.equipped ? '⬇️ Déséquiper' : '⬆️ Équiper'}
+                  </button>
+                )}
+                <button onClick={() => setConfirmDelete(true)}
+                  style={{ fontSize:13, background:'rgba(239,83,80,0.1)', border:'1px solid rgba(239,83,80,0.35)', color:'#EF5350', borderRadius:10, padding:'9px 14px', cursor:'pointer' }}>
+                  🗑️
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -225,10 +260,17 @@ function Bar({ label, value, color, pct }) {
     <div className="stat-bar-bg"><div className="stat-bar-fill" style={{ width:`${pct}%`, background:color }} /></div>
   </div>
 }
-function StatCard({ icon, label, value, color }) {
+function StatCard({ icon, label, value, base, color }) {
+  const bonus = (base !== undefined && value > base) ? value - base : 0
   return <div className="glass" style={{ padding:'12px 14px', display:'flex', alignItems:'center', gap:10 }}>
     <span style={{ fontSize:20 }}>{icon}</span>
-    <div><p style={{ margin:0, fontSize:18, fontWeight:700, color }}>{value}</p><p style={{ margin:0, fontSize:11, color:'#6B6B8A' }}>{label}</p></div>
+    <div>
+      <div style={{ display:'flex', alignItems:'baseline', gap:4 }}>
+        <p style={{ margin:0, fontSize:18, fontWeight:700, color }}>{value}</p>
+        {bonus > 0 && <span style={{ fontSize:11, color:'#66BB6A', fontWeight:700 }}>+{bonus}</span>}
+      </div>
+      <p style={{ margin:0, fontSize:11, color:'#6B6B8A' }}>{label}</p>
+    </div>
   </div>
 }
 function InventorySlot({ item, selected, onClick }) {
