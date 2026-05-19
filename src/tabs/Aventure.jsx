@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { ZONES, getEnemyWithHp, runCombatRound } from '../lib/combatEngine'
-import { gainXP } from '../lib/playerUtils'
+import { gainXP, addToInventory } from '../lib/playerUtils'
 
 const QUEST_DEFS = [
   { id: 'kills',    label: 'Vaincre des ennemis',         targets: [3,5,10],  reward_gold: 80,  reward_bp: 30 },
@@ -40,11 +40,9 @@ export default function Aventure({ player, updatePlayer }) {
     if (player.level < zone.minLevel) { appendLog([{type:'info', text:`🔒 Niveau ${zone.minLevel} requis.`}]); return }
     if (zone.isBoss && player.boss_tickets <= 0) { appendLog([{type:'info', text:'🎫 Plus de tickets aujourd\'hui.'}]); return }
 
-    // Init/reset quests
     const quests = initOrResetQuests(player)
 
     if (zone.isBoss) {
-      await updatePlayer(p => ({ ...p, boss_tickets: p.boss_tickets - 1 }))
       appendLog([{type:'system', text:`🎫 Ticket utilisé. Reste: ${player.boss_tickets - 1}`}])
     }
 
@@ -57,19 +55,21 @@ export default function Aventure({ player, updatePlayer }) {
 
     for (const entry of result.log) { appendLog([entry]); await delay(100) }
 
-    let updated = { ...player, hp: result.playerHpLeft, quests }
+    let updated = {
+      ...player,
+      hp: result.playerHpLeft,
+      quests,
+      boss_tickets: zone.isBoss ? player.boss_tickets - 1 : player.boss_tickets,
+    }
 
     if (result.victory) {
       updated.gold += result.goldEarned
       updated = gainXP(updated, result.xpEarned)
-      // BP XP
       updated.bp_xp = (updated.bp_xp || 0) + 10
 
-      // Quest progress
       updated.quests = { ...updated.quests, kills: updated.quests.kills + 1, gold_earned: updated.quests.gold_earned + result.goldEarned }
       if (zone.isBoss) updated.quests.boss_runs = (updated.quests.boss_runs || 0) + 1
 
-      // Check quest completions
       const dailyQuests = getDailyQuests(updated.quests.date)
       for (const q of dailyQuests) {
         if (!updated.quests.completed.includes(q.id)) {
@@ -83,8 +83,14 @@ export default function Aventure({ player, updatePlayer }) {
         }
       }
 
-      // Loot
-      for (const item of result.loot) { updated = addToInventory(updated, item) }
+      // Loot — affiche un message si l'inventaire est plein
+      for (const item of result.loot) {
+        const { player: p, added } = addToInventory(updated, item)
+        updated = p
+        if (!added) {
+          appendLog([{type:'info', text:`📦 Inventaire plein ! ${item.emoji} ${item.name} perdu.`}])
+        }
+      }
       if (updated.level > player.level) appendLog([{type:'win', text:`🎉 NIVEAU ${updated.level} ATTEINT !`}])
     }
 
@@ -191,11 +197,4 @@ function PlayerHpBar({ player }) {
   </div>
 }
 
-function addToInventory(player, item) {
-  const inv = [...(player.inventory||[])]
-  const idx = inv.findIndex(s=>s&&s.name===item.name&&s.type==='consommable')
-  if (idx>=0) inv[idx]={...inv[idx],qty:(inv[idx].qty||1)+1}
-  else { const e=inv.findIndex(s=>s===null); if(e>=0) inv[e]={...item,id:Date.now()+Math.random()}; else if(inv.length<20) inv.push({...item,id:Date.now()+Math.random()}) }
-  return {...player,inventory:inv}
-}
 function delay(ms) { return new Promise(r=>setTimeout(r,ms)) }
