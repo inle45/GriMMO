@@ -113,7 +113,7 @@ export default function Economie({ player, updatePlayer }) {
     setRolling(false)
   }
 
-  const SUBTABS = ['🏪 Échoppe', '🤝 Marché', '💎 Premium', '🎰 Gacha']
+  const SUBTABS = ['🏪 Échoppe', '🤝 Marché', '💎 Premium', '🎰 Gacha', '🎖️ Passe']
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
@@ -168,6 +168,11 @@ export default function Economie({ player, updatePlayer }) {
           <SectionTitle icon="🎰" title="Invocation Gacha" sub="Chances : Commun 50% · Rare 20% · Épique 8% · Légendaire 1%" />
           <GachaSection gold={player?.gold || 0} rolling={rolling} result={gachaResult}
             onRoll={() => doGacha(false)} onRoll10={() => doGacha(true)} onClose={() => setGachaResult(null)} />
+        </>}
+
+        {subTab === 4 && <>
+          <SectionTitle icon="🎖️" title="Pass de Combat" sub="Gagnez de l'XP en combattant et en faisant des quêtes" />
+          <BattlePass player={player} updatePlayer={updatePlayer} />
         </>}
 
         <div style={{ height: 8 }} />
@@ -236,6 +241,86 @@ function PremiumItem({ item, player, onBuy }) {
           color: isGold ? '#FFD700' : '#CE93D8',
         }}>{isGold ? `💰 ${item.price} Or` : `💎 ${item.price}`}</button>
       )}
+    </div>
+  )
+}
+
+const BP_TIERS = [
+  { tier:1,  xp:100,  reward:{ gold:150 } },
+  { tier:2,  xp:250,  reward:{ gold:0,   item:{ name:'Grande Potion x2', emoji:'💊', type:'consommable', effect:'hp+70', rarity:'rare', qty:2 } } },
+  { tier:3,  xp:450,  reward:{ gold:250 } },
+  { tier:4,  xp:700,  reward:{ gold:0,   item:{ name:'Rune de Puissance', emoji:'🔮', type:'rune', effect:'atk+3', rarity:'rare', qty:1 } } },
+  { tier:5,  xp:1000, reward:{ gold:400, title:'Le Survivant' } },
+  { tier:6,  xp:1350, reward:{ gold:0,   item:{ name:'Élixir Ancien', emoji:'⚗️', type:'consommable', effect:'hp+60', rarity:'rare', qty:1 } } },
+  { tier:7,  xp:1750, reward:{ gold:600 } },
+  { tier:8,  xp:2200, reward:{ gold:0,   item:{ name:'Épée Fantôme', emoji:'⚔️', type:'arme', effect:'atk+8', rarity:'epique', qty:1 } } },
+  { tier:9,  xp:2700, reward:{ gold:800 } },
+  { tier:10, xp:3300, reward:{ gold:1000, item:{ name:'Orbe du Néant', emoji:'🔵', type:'accessoire', effect:'atk+10', rarity:'epique', qty:1 }, title:'Le Damné Éternel' } },
+]
+
+function addInv(player, item) {
+  const inv=[...(player.inventory||[])]
+  const e=inv.findIndex(s=>s===null); if(e>=0) inv[e]={...item,id:Date.now()+Math.random()}; else if(inv.length<20) inv.push({...item,id:Date.now()+Math.random()})
+  return inv
+}
+
+function BattlePass({ player, updatePlayer }) {
+  if (!player) return null
+  const bpXp      = player.bp_xp || 0
+  const claimed   = player.bp_claimed || []
+
+  function claimTier(tier) {
+    const t = BP_TIERS.find(t=>t.tier===tier)
+    if (!t || claimed.includes(tier) || bpXp < t.xp) return
+    let updated = { ...player, bp_claimed: [...claimed, tier] }
+    if (t.reward.gold) updated.gold = updated.gold + t.reward.gold
+    if (t.reward.item) updated.inventory = addInv(updated, t.reward.item)
+    updatePlayer(updated)
+  }
+
+  const currentTier = BP_TIERS.filter(t=>bpXp>=t.xp).length
+  const nextTier    = BP_TIERS[currentTier]
+  const pct         = nextTier ? Math.round((bpXp / nextTier.xp)*100) : 100
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+      {/* Progression globale */}
+      <div className="glass" style={{ padding:'14px 16px' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+          <span style={{ fontSize:13, fontWeight:700, color:'#FFD700' }}>⭐ {bpXp} XP Passe</span>
+          <span style={{ fontSize:12, color:'#6B6B8A' }}>{nextTier ? `Palier ${currentTier+1} dans ${nextTier.xp-bpXp} XP` : 'Passe terminé !'}</span>
+        </div>
+        <div className="stat-bar-bg">
+          <div className="stat-bar-fill" style={{ width:`${pct}%`, background:'linear-gradient(90deg,#FF6B35,#FFD700)' }} />
+        </div>
+        <p style={{ margin:'8px 0 0', fontSize:11, color:'#4A4A6A' }}>⚔️ +10 XP par combat · ✅ +25-60 XP par quête journalière</p>
+      </div>
+
+      {/* Tiers */}
+      {BP_TIERS.map(t => {
+        const unlocked = bpXp >= t.xp
+        const done     = claimed.includes(t.tier)
+        const rc       = t.reward.item ? (RARITY_COLORS[t.reward.item.rarity] || '#B0B0C8') : '#FFD700'
+        return (
+          <div key={t.tier} className="glass" style={{ padding:'12px 14px', display:'flex', alignItems:'center', gap:12, opacity:done?0.6:1, border: unlocked&&!done?'1px solid rgba(255,215,0,0.35)':undefined }}>
+            <div style={{ width:36, height:36, borderRadius:10, background:unlocked?'rgba(255,215,0,0.15)':'rgba(255,255,255,0.05)', border:`1px solid ${unlocked?'rgba(255,215,0,0.4)':'rgba(255,255,255,0.1)'}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, fontWeight:700, color:unlocked?'#FFD700':'#4A4A6A', flexShrink:0 }}>
+              {done?'✓':t.tier}
+            </div>
+            <div style={{ flex:1 }}>
+              <p style={{ margin:0, fontSize:13, fontWeight:600, color: t.reward.item?rc:'#FFD700' }}>
+                {t.reward.item ? `${t.reward.item.emoji} ${t.reward.item.name}` : `💰 ${t.reward.gold} Or`}
+                {t.reward.gold && t.reward.item ? ` + 💰${t.reward.gold}` : ''}
+                {t.reward.title ? ` · Titre : ${t.reward.title}` : ''}
+              </p>
+              <p style={{ margin:0, fontSize:11, color:'#6B6B8A' }}>{t.xp} XP requis</p>
+            </div>
+            {unlocked && !done && (
+              <button className="btn-primary" onClick={()=>claimTier(t.tier)} style={{ flexShrink:0, padding:'6px 12px', fontSize:12 }}>Réclamer</button>
+            )}
+            {!unlocked && <span style={{ fontSize:11, color:'#4A4A6A' }}>{t.xp - bpXp} XP</span>}
+          </div>
+        )
+      })}
     </div>
   )
 }
